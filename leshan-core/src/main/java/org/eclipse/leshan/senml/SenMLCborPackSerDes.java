@@ -17,9 +17,12 @@ package org.eclipse.leshan.senml;
 import java.io.ByteArrayOutputStream;
 
 import org.eclipse.leshan.core.model.ResourceModel.Type;
+import org.eclipse.leshan.util.Hex;
 
+import com.fasterxml.jackson.core.JsonToken;
 import com.fasterxml.jackson.dataformat.cbor.CBORFactory;
 import com.fasterxml.jackson.dataformat.cbor.CBORGenerator;
+import com.fasterxml.jackson.dataformat.cbor.CBORParser;
 
 public class SenMLCborPackSerDes {
 
@@ -115,5 +118,81 @@ public class SenMLCborPackSerDes {
         }
 
         return out.toByteArray();
+    }
+
+    public SenMLPack deserializeFromCbor(byte[] content) throws SenMLCborException {
+        SenMLPack pack = new SenMLPack();
+
+        try {
+            CBORFactory factory = new CBORFactory();
+            CBORParser parser = factory.createParser(content);
+
+            JsonToken token = null;
+            while (true) {
+                token = parser.nextToken();
+                if (token == JsonToken.START_ARRAY) {
+                    continue;
+                }
+
+                if (token == JsonToken.START_OBJECT) {
+                    SenMLRecord record = parseSenMLRecord(content, parser);
+                    pack.addRecord(record);
+                }
+
+                if (token == JsonToken.END_ARRAY) {
+                    break;
+                }
+            }
+        } catch (Exception e) {
+            throw new SenMLCborException(
+                    "Impossible to decode SenML pack from CBOR data: \n" + Hex.encodeHexString(content), e);
+        }
+
+        return pack;
+    }
+
+    private static SenMLRecord parseSenMLRecord(byte[] content, CBORParser parser) throws SenMLCborException {
+        SenMLRecord record = new SenMLRecord();
+        try {
+            JsonToken token = null;
+            String fileName = null;
+            while (true) {
+                token = parser.nextToken();
+                if (token == JsonToken.END_OBJECT) {
+                    return record;
+                } else if (token == JsonToken.FIELD_NAME) {
+                    fileName = parser.getCurrentName();
+                    if (fileName != null && fileName.equals("-2")) {
+                        token = parser.nextToken();
+                        record.setBaseName(parser.getText());
+                        continue;
+                    } else if (fileName != null && fileName.equals("-3")) {
+                        token = parser.nextToken();
+                        record.setBaseTime(parser.getLongValue());
+                    } else if (fileName != null && fileName.equals("0")) {
+                        token = parser.nextToken();
+                        record.setName(parser.getText());
+                    } else if (fileName != null && fileName.equals("6")) {
+                        token = parser.nextToken();
+                        record.setTime(parser.getLongValue());
+                    }
+                } else {
+                    if (fileName != null && fileName.equals("2")) {
+                        record.setFloatValue(parser.getFloatValue());
+                    } else if (fileName != null && fileName.equals("4")) {
+                        record.setBooleanValue(parser.getValueAsBoolean());
+                    } else if (fileName != null && fileName.equals("3")) {
+                        record.setStringValue(parser.getValueAsString());
+                    } else if (fileName != null && fileName.equals("8")) {
+                        record.setStringValue(parser.getValueAsString());
+                    } else if (fileName != null && fileName.equals("vlo")) {
+                        record.setObjectLinkValue(parser.getValueAsString());
+                    }
+                }
+            }
+        } catch (Exception e) {
+            throw new SenMLCborException(
+                    "Impossible to decode SenML record from CBOR data: \n" + Hex.encodeHexString(content), e);
+        }
     }
 }

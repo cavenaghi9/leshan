@@ -23,4 +23,8 @@ public class SenMLCbor {
     public static byte[] toSenMLCbor(SenMLPack pack) throws SenMLCborException {
         return serDes.serializeToCbor(pack);
     }
+
+    public static SenMLPack fromSenMLCbor(byte[] content) throws SenMLCborException {
+        return serDes.deserializeFromCbor(content);
+    }
 }
